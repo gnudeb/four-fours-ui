@@ -36,3 +36,27 @@
     transform: rotate(360deg);
   }
 }
+
+body {
+  background-color: dimgrey;
+  color: white;
+}
+
+div, button, input {
+  font-family: monospace;
+  font-size: 20px;
+}
+
+.katex {
+  font-family: monospace;
+  font-size: 2em;
+}
+
+div {
+  margin-top: 10px;
+  margin-left: 5px;
+}
+
+input {
+  width: 400px;
+}

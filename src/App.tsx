@@ -6,11 +6,25 @@ import katex from 'katex'
 import { Fourfours, Fourfours__factory } from './typechain'
 import { convertJsepToPostfix, expressionToLatex, rawToJsepExpression } from './draft';
 
+const sampleSolution = '4! + sqrt(4^4)/4'
+
+const supportedNetworks = ['matic']
 const contracts = {
   matic: '0x373b6Ab893418e2a8Cae0C952e4d956F8F184393',
 } as Record<string, string>
 
-const supportedNetworks = ['matic']
+const explorers = {
+  matic: 'polygonscan.com',
+  homestead: 'etherscan.io',
+} as Record<string, string>
+
+const explorerLink = (tokenId: string, network: string): string => {
+  const explorerDomain = explorers[network]
+  const contractAddress = contracts[network]
+  if (!explorerDomain || !contractAddress) return ''
+
+  return `https://${explorerDomain}/token/${contractAddress}?a=${tokenId}`
+}
 
 const provider = new ethers.providers.Web3Provider((window as any).ethereum, "any");
 
@@ -72,13 +86,15 @@ const useContract = (network: string) => {
   return {status, contract}
 }
 
-const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
-  const [proposedSolution, setProposedSolution] = useState('')
+const FourFours: React.FC<{contract: Fourfours, network: string}> = ({contract, network}) => {
+  const [proposedSolution, setProposedSolution] = useState(sampleSolution)
   const [computedValue, setComputedValue] = useState('')
   const [error, setError] = useState('')
   const [owner, setOwner] = useState('')
   const [currentlyClaiming, setCurrentlyClaiming] = useState(false)
   const [claimError, setClaimError] = useState('')
+
+  const inputRef = useRef<HTMLInputElement>(null)
 
   let jsepExpression: jsep.Expression = jsep("")
   let isValidExpression = false
@@ -87,7 +103,16 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
     isValidExpression = true
   } catch {}
   const formattedSolution = isValidExpression ? convertJsepToPostfix(jsepExpression) : ''
-  const latex = isValidExpression ? expressionToLatex(jsepExpression) : ''
+  let latex = isValidExpression ? expressionToLatex(jsepExpression) : ''
+  if (computedValue) {
+    latex = `${latex} = ${computedValue}`
+  }
+
+  useEffect(() => {
+    if (!inputRef.current) return
+
+    inputRef.current.value = sampleSolution
+  }, [])
 
   useEffect(() => {
     var isCancelled = false
@@ -142,15 +167,36 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
   }
 
   return <>
-    <input placeholder='Type your puzzle solution' style={{width: 200}} onChange={handleInput} disabled={currentlyClaiming} />
-    <div>Postfix representation (as seen by the contract): {formattedSolution}</div>
-    <div dangerouslySetInnerHTML={{__html: katex.renderToString(latex + ` = ${computedValue?.toString() || '?'}`)}} />
-    <div>Computed value: {computedValue || error}</div>
-    {owner && <div>Owned by: {owner}</div>}
+    <div>
+      <input ref={inputRef} placeholder='type your puzzle solution' onChange={handleInput} disabled={currentlyClaiming} />
+    </div>
+
+    <div dangerouslySetInnerHTML={{__html: katex.renderToString(latex)}} />
+
+    {formattedSolution && <div>postfix representation (as seen by the contract): {formattedSolution}</div>}
+
+    <div>computed value: {computedValue || error}</div>
+
+    {owner && <>
+      <div>
+        owned by: {owner}
+        {' '}
+        (<a
+          href={explorerLink(computedValue, network)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          see on {explorers[network]}
+        </a>)
+      </div>
+    </>}
+
     {!!computedValue && !owner && <>
-      <div>Not owned by anyone!</div>
-      <button disabled={currentlyClaiming} onClick={claimToken}>Claim!</button>
-      {claimError && <div>Failed to claim token: {claimError}</div>}
+      <div>not owned by anyone!</div>
+      <div>
+        <button disabled={currentlyClaiming} onClick={claimToken}>claim!</button>
+      </div>
+      {claimError && <div>failed to claim token: {claimError}</div>}
     </>}
   </>
 }
@@ -161,21 +207,21 @@ const App = () => {
 
   return (
     <div>
-      <div>
-        Status: {status}
-      </div>
+      <div>four fours puzzle (see <a href='https://en.wikipedia.org/wiki/Four_fours'>https://en.wikipedia.org/wiki/Four_fours</a>)</div>
+
+      <div>status: {status}</div>
 
       {status === 'not connected' &&
         <div>
-          <button onClick={connect}>Connect</button>
+          <button onClick={connect}>connect</button>
         </div>
       }
 
       {status === 'connected' && <>
-        <div>Network: {network}</div>
-        <div>Contract: {contractStatus}</div>
+        <div>network: {network}</div>
+        <div>contract: {contractStatus}</div>
 
-        {contractStatus === 'initialized' && contract && <FourFours contract={contract} />}
+        {contractStatus === 'initialized' && contract && <FourFours {...{contract, network}} />}
       </>}
 
     </div>

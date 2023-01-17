@@ -1,7 +1,10 @@
-import { Contract, ethers, Signer } from 'ethers';
-import React, { ChangeEvent, ChangeEventHandler, useCallback, useEffect, useRef, useState } from 'react';
+import { ethers } from 'ethers';
+import React, { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import jsep from 'jsep'
+import katex from 'katex'
 
 import { Fourfours, Fourfours__factory } from './typechain'
+import { convertJsepToPostfix, expressionToLatex, rawToJsepExpression } from './draft';
 
 const contracts = {
   matic: '0x373b6Ab893418e2a8Cae0C952e4d956F8F184393',
@@ -77,6 +80,15 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
   const [currentlyClaiming, setCurrentlyClaiming] = useState(false)
   const [claimError, setClaimError] = useState('')
 
+  let jsepExpression: jsep.Expression = jsep("")
+  let isValidExpression = false
+  try {
+    jsepExpression = rawToJsepExpression(proposedSolution)
+    isValidExpression = true
+  } catch {}
+  const formattedSolution = isValidExpression ? convertJsepToPostfix(jsepExpression) : ''
+  const latex = isValidExpression ? expressionToLatex(jsepExpression) : ''
+
   useEffect(() => {
     var isCancelled = false
 
@@ -84,7 +96,7 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
     setComputedValue('')
     setClaimError('')
 
-    contract.compute(proposedSolution)
+    contract.compute(formattedSolution)
       .then(response => {
         if (isCancelled) return
         setComputedValue(response.toString())
@@ -95,7 +107,7 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
       })
 
     return () => { isCancelled = true }
-  }, [contract, proposedSolution])
+  }, [contract, formattedSolution])
 
   useEffect(() => {
     if (currentlyClaiming) return
@@ -116,14 +128,14 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
   const claimToken = useCallback(async () => {
     setCurrentlyClaiming(true)
     try {
-      const tx = await contract.claim(proposedSolution)
+      const tx = await contract.claim(formattedSolution)
       await tx.wait()
     } catch (e: any) {
       setClaimError(e.reason)
     } finally {
       setCurrentlyClaiming(false)
     }
-  }, [contract, proposedSolution])
+  }, [contract, formattedSolution])
 
   const handleInput = (e: ChangeEvent<HTMLInputElement>) => {
     setProposedSolution(e.target.value)
@@ -131,6 +143,8 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
 
   return <>
     <input placeholder='Type your puzzle solution' style={{width: 200}} onChange={handleInput} disabled={currentlyClaiming} />
+    <div>Postfix representation (as seen by the contract): {formattedSolution}</div>
+    <div dangerouslySetInnerHTML={{__html: katex.renderToString(latex + ` = ${computedValue?.toString() || '?'}`)}} />
     <div>Computed value: {computedValue || error}</div>
     {owner && <div>Owned by: {owner}</div>}
     {!!computedValue && !owner && <>
@@ -144,13 +158,6 @@ const FourFours: React.FC<{contract: Fourfours}> = ({contract}) => {
 const App = () => {
   const {status, connect, network} = useMetamask()
   const {status: contractStatus, contract} = useContract(network)
-
-  useEffect(() => {
-    if (!contract) return
-
-    contract.compute('4444+++')
-      .then(v => console.log(v.toString()))
-  }, [contract])
 
   return (
     <div>

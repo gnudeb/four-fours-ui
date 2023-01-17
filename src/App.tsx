@@ -204,6 +204,20 @@ const FourFours: React.FC<{contract: Fourfours, network: string}> = ({contract, 
 const App = () => {
   const {status, connect, network} = useMetamask()
   const {status: contractStatus, contract} = useContract(network)
+  const [switchingNetwork, setSwitchingNetwork] = useState(false)
+
+  const handleConnectToPolygon = useCallback(async () => {
+    setSwitchingNetwork(true)
+
+    try {
+      await (window as any).ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x89' }],
+      })
+    } finally {
+      setSwitchingNetwork(false)
+    }
+  }, [])
 
   return (
     <div>
@@ -219,7 +233,15 @@ const App = () => {
 
       {status === 'connected' && <>
         <div>network: {network}</div>
-        <div>contract: {contractStatus}</div>
+        <div>
+          contract: {contractStatus}
+          {' '}
+          {contractStatus === 'unsupported network' && <>
+            <button disabled={switchingNetwork} onClick={handleConnectToPolygon}>
+              connect to polygon
+            </button>
+          </>}
+        </div>
 
         {contractStatus === 'initialized' && contract && <FourFours {...{contract, network}} />}
       </>}

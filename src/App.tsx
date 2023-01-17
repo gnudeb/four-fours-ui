@@ -26,7 +26,13 @@ const explorerLink = (tokenId: string, network: string): string => {
   return `https://${explorerDomain}/token/${contractAddress}?a=${tokenId}`
 }
 
-const provider = new ethers.providers.Web3Provider((window as any).ethereum, "any");
+let _provider: ethers.providers.Web3Provider
+const provider = () => {
+  if (!_provider) {
+    _provider = new ethers.providers.Web3Provider((window as any).ethereum, "any")
+  }
+  return _provider
+}
 
 const useMetamask = () => {
   const connectingRef = useRef(false)
@@ -47,7 +53,7 @@ const useMetamask = () => {
   useEffect(() => {
     if (status !== 'connected') return
 
-    setNetwork(provider.network.name)
+    provider().getNetwork().then(({name}) => setNetwork(name))
   }, [status])
 
   const connect = useCallback(async () => {
@@ -56,7 +62,7 @@ const useMetamask = () => {
 
     try {
       setStatus('connecting')
-      await provider.send("eth_requestAccounts", [])
+      await provider().send("eth_requestAccounts", [])
     } catch {
       setStatus('failed to connect')
     }
@@ -79,7 +85,7 @@ const useContract = (network: string) => {
       return
     }
 
-    setContract(new ethers.Contract(contracts[network], Fourfours__factory.createInterface(), provider.getSigner()) as Fourfours)
+    setContract(new ethers.Contract(contracts[network], Fourfours__factory.createInterface(), provider().getSigner()) as Fourfours)
     setStatus('initialized')
   }, [network])
 
@@ -167,6 +173,8 @@ const FourFours: React.FC<{contract: Fourfours, network: string}> = ({contract, 
   }
 
   return <>
+    <div>permitted operations: +, -, *, /, sqrt(), ^, !, parentheses</div>
+
     <div>
       <input ref={inputRef} placeholder='type your puzzle solution' onChange={handleInput} disabled={currentlyClaiming} />
     </div>
@@ -220,9 +228,7 @@ const App = () => {
   }, [])
 
   return (
-    <div>
-      <div>four fours puzzle (see <a href='https://en.wikipedia.org/wiki/Four_fours'>https://en.wikipedia.org/wiki/Four_fours</a>)</div>
-
+    <>
       <div>status: {status}</div>
 
       {status === 'not connected' &&
@@ -246,8 +252,16 @@ const App = () => {
         {contractStatus === 'initialized' && contract && <FourFours {...{contract, network}} />}
       </>}
 
-    </div>
+    </>
   )
 }
 
-export default App;
+const AppHeader = () => <div>
+  <div>four fours puzzle (see <a href='https://en.wikipedia.org/wiki/Four_fours'>https://en.wikipedia.org/wiki/Four_fours</a>)</div>
+
+  {(window as any).ethereum
+    ? <App />
+    : <div>no metamask detected</div>}
+</div>
+
+export default AppHeader;
